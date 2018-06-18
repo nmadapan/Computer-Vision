@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import os
 
 def find_homography_2d(pts1, pts2):
     # Assertion
@@ -33,3 +34,23 @@ def homo_to_real(pts):
     pts = pts / pts[-1,:]
     return pts[:-1,:].T
 
+def save_mps(event, x, y, flags, param):
+    fac, mps = param
+    if(event == cv2.EVENT_LBUTTONUP):
+        mps.append([int(fac*x), int(fac*y)])
+        print(int(fac*x), int(fac*y))
+
+def create_matching_points(img_path):
+    npz_path = img_path[:-4]+'.npz'
+    flag = os.path.isfile(npz_path)
+    if(not flag):
+        img = cv2.imread(img_path)
+        fac = max(float(int(img.shape[1]/960)), float(int(img.shape[0]/540)))
+        resz_img = cv2.resize(img, None, fx=1/fac, fy=1/fac, interpolation = cv2.INTER_CUBIC)
+        cv2.namedWindow('TempImage')
+        mps = []
+        cv2.setMouseCallback('TempImage', save_mps, param=(fac, mps))
+        cv2.imshow('TempImage', resz_img)
+        cv2.waitKey(0)
+        np.savez(npz_path, mps = np.array(mps), size_info = {'x_max': img.shape[1], 'y_max': img.shape[0]})
+    return np.load(npz_path)
