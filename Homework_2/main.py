@@ -1,12 +1,14 @@
 import sys, os
 import numpy as np
+
+sys.path.insert(0, os.path.join('..', 'utils'))
 from helpers import *
 
 ## Initialization
-all_img_paths = ['.\\images\\1.jpg', '.\\images\\2.jpg', '.\\images\\3.jpg', '.\\images\\Seinfeld.jpg']
+all_img_paths = [os.path.join('.','images','1.jpg'), os.path.join('.','images','2.jpg'), os.path.join('.','images','3.jpg'), os.path.join('.','images','Seinfeld.jpg')]
 
-# img_path = '.\\images\\n1.jpg'
-# img_path_ref = '.\\images\\n2.jpg'
+# img_path = os.path.join('.','images','n1.jpg')
+# img_path_ref = os.path.join('.','images','n2.jpg')
 
 img_path = all_img_paths[0]
 img_path_ref = all_img_paths[-1]
