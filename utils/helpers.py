@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-import os
+import os, time
 
 def find_homography_2d(pts1, pts2):
     # Assertion
@@ -27,38 +27,52 @@ def find_homography_2d(pts1, pts2):
     Hinv = np.linalg.inv(H)
     return H, Hinv / Hinv[-1,-1]
 
-def apply_homography(img_path, H):
-	H[:,2] = 1.0 # To ensure there is no translation of the image.
-	img = cv2.imread(img_path)
-	xv, yv = np.meshgrid(range(img.shape[1]), range(img.shape[0]))
-	img_pts = np.array([xv.flatten(), yv.flatten()]).T
-	trans_img_pts = np.dot(H, real_to_homo(img_pts).T)
-	trans_img_pts = homo_to_real(trans_img_pts.T).astype(int)
-	W_new, H_new = np.max(trans_img_pts[:,0]), np.max(trans_img_pts[:,1])
-	img_new = np.zeros((H_new+1, W_new+1, 3), dtype = np.uint8)
+def apply_homography(img_path, H, num_partitions = 1):
+    H[:2,-1] = 0.0 # To ensure there is no translation of the image.
+    img = cv2.imread(img_path)
+    xv, yv = np.meshgrid(range(0, img.shape[1], img.shape[1]-1), range(0, img.shape[0], img.shape[0]-1))
+    img_pts = np.array([xv.flatten(), yv.flatten()]).T
+    trans_img_pts = np.dot(H, real_to_homo(img_pts).T)
+    trans_img_pts = homo_to_real(trans_img_pts.T).astype(int)
+    W_new, H_new = np.max(trans_img_pts[:,0]), np.max(trans_img_pts[:,1])
+    img_new = np.zeros((H_new+1, W_new+1, 3), dtype = np.uint8)
 
-	img_new[trans_img_pts[:,1].tolist(), trans_img_pts[:,0].tolist(), :] = img[img_pts[:,1].tolist(), img_pts[:,0].tolist(), :]
+    x_batch_sz = int(W_new/float(num_partitions))
+    y_batch_sz = int(H_new/float(num_partitions))
+    for x_part_idx in range(num_partitions):
+        for y_part_idx in range(num_partitions):
+            x_start, x_end = x_part_idx*x_batch_sz, (x_part_idx+1)*x_batch_sz
+            y_start, y_end = y_part_idx*y_batch_sz, (y_part_idx+1)*y_batch_sz
+            xv, yv = np.meshgrid(range(x_start, x_end), range(y_start, y_end))
+            img_new_pts = np.array([xv.flatten(), yv.flatten()]).T
+            trans_img_new_pts = np.dot(np.linalg.inv(H), real_to_homo(img_new_pts).T)
+            trans_img_new_pts = homo_to_real(trans_img_new_pts.T).astype(int)
+            trans_img_new_pts[:,0] = np.clip(trans_img_new_pts[:,0], 0, img.shape[1]-1)
+            trans_img_new_pts[:,1] = np.clip(trans_img_new_pts[:,1], 0, img.shape[0]-1)
 
-	write_filepath = os.path.join(os.path.dirname(img_path), os.path.basename(img_path).split('.')[0]+'_new2.jpg')
-	cv2.imwrite(write_filepath, img_new)
+            # This is the bottle nect step. It takes the most time.
+            img_new[img_new_pts[:,1].tolist(), img_new_pts[:,0].tolist(), :] = img[trans_img_new_pts[:,1].tolist(), trans_img_new_pts[:,0].tolist(), :]
+
+    write_filepath = os.path.join(os.path.dirname(img_path), os.path.basename(img_path).split('.')[0]+'_new2.jpg')
+    cv2.imwrite(write_filepath, img_new)
 
 def apply_trans_patch(base_img_path, template_img_path, H):
-	## Read images
-	base_img = cv2.imread(base_img_path)
-	temp_img = cv2.imread(template_img_path)
+    ## Read images
+    base_img = cv2.imread(base_img_path)
+    temp_img = cv2.imread(template_img_path)
 
-	xv, yv = np.meshgrid(range(temp_img.shape[1]), range(temp_img.shape[0]))
-	temp_img_pts = np.array([xv.flatten(), yv.flatten()]).T
-	trans_temp_img_pts = np.dot(H, real_to_homo(temp_img_pts).T)
+    xv, yv = np.meshgrid(range(temp_img.shape[1]), range(temp_img.shape[0]))
+    temp_img_pts = np.array([xv.flatten(), yv.flatten()]).T
+    trans_temp_img_pts = np.dot(H, real_to_homo(temp_img_pts).T)
 
-	trans_temp_img_pts = homo_to_real(trans_temp_img_pts.T).astype(int)
-	trans_temp_img_pts[:,0] = np.clip(trans_temp_img_pts[:,0], 0, base_img.shape[1])
-	trans_temp_img_pts[:,1] = np.clip(trans_temp_img_pts[:,1], 0, base_img.shape[0])
+    trans_temp_img_pts = homo_to_real(trans_temp_img_pts.T).astype(int)
+    trans_temp_img_pts[:,0] = np.clip(trans_temp_img_pts[:,0], 0, base_img.shape[1]-1)
+    trans_temp_img_pts[:,1] = np.clip(trans_temp_img_pts[:,1], 0, base_img.shape[0]-1)
 
-	base_img[trans_temp_img_pts[:,1].tolist(), trans_temp_img_pts[:,0].tolist(), :] = temp_img[temp_img_pts[:,1].tolist(), temp_img_pts[:,0].tolist(), :]
+    base_img[trans_temp_img_pts[:,1].tolist(), trans_temp_img_pts[:,0].tolist(), :] = temp_img[temp_img_pts[:,1].tolist(), temp_img_pts[:,0].tolist(), :]
 
-	write_filepath = os.path.join(os.path.dirname(base_img_path), os.path.basename(base_img_path).split('.')[0]+'_new.jpg')
-	cv2.imwrite(write_filepath, base_img)
+    write_filepath = os.path.join(os.path.dirname(base_img_path), os.path.basename(base_img_path).split('.')[0]+'_new.jpg')
+    cv2.imwrite(write_filepath, base_img)
 
 def real_to_homo(pts):
     # pts is a 2D numpy array of size _ x 2/3
