@@ -15,9 +15,14 @@ def find_homography_2d(pts1, pts2):
         A.append([0, 0, 0, x2, y2, 1, -1*y1*x2, -1*y1*y2, -1*y1])
     A = np.array(A)
 
-    # Finding the homography. H[3,3] is assumed 1.
-    h = np.dot(np.linalg.pinv(A[:,:-1]), -1*A[:,-1])
-    h = np.append(h, 1)
+    [U, S, V] = np.linalg.svd(A, full_matrices = True)
+    h = V.T[:,-1]
+    h = h / h[-1]
+
+    # # Finding the homography. H[3,3] is assumed 1.
+    # h = np.dot(np.linalg.pinv(A[:,:-1]), -1*A[:,-1])
+    # h = np.append(h, 1)
+
     H = np.reshape(h, (3, 3))
     Hinv = np.linalg.inv(H)
     return H, Hinv / Hinv[-1,-1]
