@@ -28,13 +28,16 @@ def find_homography_2d(pts1, pts2):
     return H, Hinv / Hinv[-1,-1]
 
 def apply_homography(img_path, H, num_partitions = 1):
-    H[:2,-1] = 0.0 # To ensure there is no translation of the image.
+    # H[:2,-1] = 0.0 # To ensure there is no translation of the image.
     img = cv2.imread(img_path)
+    img[0,:], img[:,0], img[-1,:], img[:,-1] = 0, 0, 0, 0
     xv, yv = np.meshgrid(range(0, img.shape[1], img.shape[1]-1), range(0, img.shape[0], img.shape[0]-1))
     img_pts = np.array([xv.flatten(), yv.flatten()]).T
     trans_img_pts = np.dot(H, real_to_homo(img_pts).T)
     trans_img_pts = homo_to_real(trans_img_pts.T).astype(int)
-    W_new, H_new = np.max(trans_img_pts[:,0]), np.max(trans_img_pts[:,1])
+    W_new = np.max(trans_img_pts[:,0]) - np.min(trans_img_pts[:,0])
+    H_new = np.max(trans_img_pts[:,1]) - np.min(trans_img_pts[:,1])
+    xmin, ymin = np.min(trans_img_pts[:,0]), np.min(trans_img_pts[:,1])
     img_new = np.zeros((H_new+1, W_new+1, 3), dtype = np.uint8)
 
     x_batch_sz = int(W_new/float(num_partitions))
@@ -44,12 +47,13 @@ def apply_homography(img_path, H, num_partitions = 1):
             x_start, x_end = x_part_idx*x_batch_sz, (x_part_idx+1)*x_batch_sz
             y_start, y_end = y_part_idx*y_batch_sz, (y_part_idx+1)*y_batch_sz
             xv, yv = np.meshgrid(range(x_start, x_end), range(y_start, y_end))
+            xv, yv = xv + xmin, yv + ymin
             img_new_pts = np.array([xv.flatten(), yv.flatten()]).T
             trans_img_new_pts = np.dot(np.linalg.inv(H), real_to_homo(img_new_pts).T)
             trans_img_new_pts = homo_to_real(trans_img_new_pts.T).astype(int)
             trans_img_new_pts[:,0] = np.clip(trans_img_new_pts[:,0], 0, img.shape[1]-1)
             trans_img_new_pts[:,1] = np.clip(trans_img_new_pts[:,1], 0, img.shape[0]-1)
-
+            img_new_pts = img_new_pts - [xmin, ymin]
             # This is the bottle nect step. It takes the most time.
             img_new[img_new_pts[:,1].tolist(), img_new_pts[:,0].tolist(), :] = img[trans_img_new_pts[:,1].tolist(), trans_img_new_pts[:,0].tolist(), :]
 
