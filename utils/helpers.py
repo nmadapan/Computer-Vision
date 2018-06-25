@@ -2,6 +2,32 @@ import cv2
 import numpy as np
 import os, time
 
+def find_homography_vl(pts):
+    ## Find homography resulting from vanishing line approach.
+    # pts should contain points either in clockwise or anti clockwise order
+    # Assertion
+    assert isinstance(pts, np.ndarray), 'pts should be a numpy array'
+    assert pts.shape[1] == 2, 'pts should have two columns'
+    assert pts.shape[0] == 4, 'pts should have four rows'
+
+    pts = real_to_homo(pts)
+    line1 = np.cross(pts[0,:], pts[1,:])
+    line2 = np.cross(pts[2,:], pts[3,:])
+    point1 = np.cross(line1, line2)
+
+    line3 = np.cross(pts[0,:], pts[3,:])
+    line4 = np.cross(pts[1,:], pts[2,:])
+    point2 = np.cross(line3, line4)
+
+    van_line = np.cross(point1, point2)
+    van_line = van_line / van_line[-1]
+
+    H = np.eye(3)
+    H[2, 0] = van_line[0]
+    H[2, 1] = van_line[1]
+
+    return H
+
 def find_homography_2d(pts1, pts2):
     # Assertion
     assert pts1.shape[1] == 2, 'pts1 should have two columns'
@@ -81,14 +107,21 @@ def apply_trans_patch(base_img_path, template_img_path, H):
 def real_to_homo(pts):
     # pts is a 2D numpy array of size _ x 2/3
     # This function converts it into _ x 3/4 by appending 1
-    return np.concatenate((pts, np.ones((pts.shape[0], 1))), axis = 1)
+    if(pts.ndim == 1):
+        return np.append(pts, 1)
+    else:
+        return np.concatenate((pts, np.ones((pts.shape[0], 1))), axis = 1)
 
 def homo_to_real(pts):
     # pts is a 2D numpy array of size _ x 3/4
     # This function converts it into _ x 2/3 by removing last column
-    pts = pts.T
-    pts = pts / pts[-1,:]
-    return pts[:-1,:].T
+    if(pts.ndim == 1):
+        pts = pts / pts[-1]
+        return pts[:-1]
+    else:
+        pts = pts.T
+        pts = pts / pts[-1,:]
+        return pts[:-1,:].T
 
 def save_mps(event, x, y, flags, param):
     fac, mps = param
