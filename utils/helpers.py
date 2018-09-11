@@ -35,12 +35,14 @@ def find_homography_gh(pts_list):
     # print S
 
     # Find 2 x 2
-    [U, D2, V] = np.linalg.svd(S, full_matrices = True)
-    # H = np.eye(3)
-    # H[:-1,:-1] = np.dot(np.dot(V, np.diag(np.sqrt(D2))), V.T)
-    # H[2,:-1] = np.dot(np.linalg.inv(H[:-1,:-1]), np.array([h[3], h[4]])).T
-    return V/V[-1,-1]
+    [U, D2, V] = np.linalg.svd(S[:-1, :-1], full_matrices = True)
 
+    H = np.eye(3)
+    H[:-1,:-1] = np.dot(np.dot(V, np.diag(np.sqrt(D2))), V.T)
+    vv = np.dot(np.linalg.inv(H[:-1,:-1]), np.array([h[3], h[4]])).T
+    vv = vv / np.linalg.norm(vv)
+    H[2,:-1] = vv
+    return H
 
 def find_homography_af(pts):
     ## Find homography resulting from vanishing line approach.
@@ -124,6 +126,56 @@ def find_homography_2d(pts1, pts2):
     H = np.reshape(h, (3, 3))
     return H, hinv(H)
 
+def apply_homography2(img_path, H, num_partitions = 1, suff = ''):
+    img = cv2.imread(img_path)
+    img[0,:], img[:,0], img[-1,:], img[:,-1] = 0, 0, 0, 0
+
+    xv, yv = np.meshgrid(range(0, img.shape[1], img.shape[1]-1), range(0, img.shape[0], img.shape[0]-1))
+    img_pts = np.array([xv.flatten(), yv.flatten()]).T
+    trans_img_pts = np.dot(H, real_to_homo(img_pts).T)
+    ttt = homo_to_real(trans_img_pts.T).T
+    _w = np.max(ttt[0, :]) - np.min(ttt[0, :])
+    _h = np.max(ttt[1, :]) - np.min(ttt[1, :])
+    l1, l2 = img.shape[1] / _w, img.shape[0] / _h
+    K = np.diag([l1, l2, 1])
+    H = np.dot(K, H)
+
+    xv, yv = np.meshgrid(range(0, img.shape[1], img.shape[1]-1), range(0, img.shape[0], img.shape[0]-1))
+    img_pts = np.array([xv.flatten(), yv.flatten()]).T
+    trans_img_pts = np.dot(H, real_to_homo(img_pts).T)
+    trans_img_pts = homo_to_real(trans_img_pts.T).astype(int)
+
+    xmin, ymin = np.min(trans_img_pts[:,0]), np.min(trans_img_pts[:,1])
+    xmax, ymax = np.max(trans_img_pts[:,0]), np.max(trans_img_pts[:,1])
+    W_new = xmax - xmin
+    H_new = ymax - ymin
+
+    img_new = np.zeros((H_new+1, W_new+1, 3), dtype = np.uint8)
+    print 'Shape of new image: ', img_new.shape
+
+    x_batch_sz = int(W_new/float(num_partitions))
+    y_batch_sz = int(H_new/float(num_partitions))
+    for x_part_idx in range(num_partitions):
+        for y_part_idx in range(num_partitions):
+            x_start, x_end = x_part_idx*x_batch_sz, (x_part_idx+1)*x_batch_sz
+            y_start, y_end = y_part_idx*y_batch_sz, (y_part_idx+1)*y_batch_sz
+            xv, yv = np.meshgrid(range(x_start, x_end), range(y_start, y_end))
+            xv, yv = xv + xmin, yv + ymin
+            img_new_pts = np.array([xv.flatten(), yv.flatten()]).T
+            trans_img_new_pts = np.dot(hinv(H), real_to_homo(img_new_pts).T)
+            trans_img_new_pts = homo_to_real(trans_img_new_pts.T).astype(int)
+            trans_img_new_pts[:,0] = np.clip(trans_img_new_pts[:,0], 0, img.shape[1]-1)
+            trans_img_new_pts[:,1] = np.clip(trans_img_new_pts[:,1], 0, img.shape[0]-1)
+            img_new_pts = img_new_pts - [xmin, ymin]
+            # This is the bottle nect step. It takes the most time.
+            img_new[img_new_pts[:,1].tolist(), img_new_pts[:,0].tolist(), :] = img[trans_img_new_pts[:,1].tolist(), trans_img_new_pts[:,0].tolist(), :]
+
+    fname, ext = tuple(os.path.basename(img_path).split('.'))
+    write_filepath = os.path.join(os.path.dirname(img_path), fname+suff+'.'+ext)
+    print write_filepath
+    cv2.imwrite(write_filepath, img_new)
+
+
 def apply_homography(img_path, H, num_partitions = 1, suff = ''):
     img = cv2.imread(img_path)
     img[0,:], img[:,0], img[-1,:], img[:,-1] = 0, 0, 0, 0
@@ -139,6 +191,7 @@ def apply_homography(img_path, H, num_partitions = 1, suff = ''):
     H_new = ymax - ymin
 
     img_new = np.zeros((H_new+1, W_new+1, 3), dtype = np.uint8)
+    print 'Shape of new image: ', img_new.shape
 
     x_batch_sz = int(W_new/float(num_partitions))
     y_batch_sz = int(H_new/float(num_partitions))
