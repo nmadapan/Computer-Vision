@@ -9,9 +9,9 @@ import time
 
 ## Initialization
 base_img_path = os.path.join('.', 'images')
-all_img_paths = [os.path.join(base_img_path,'1.jpg'), os.path.join(base_img_path,'2.jpg'), os.path.join(base_img_path,'3.jpg'), os.path.join(base_img_path,'4.jpg'), os.path.join(base_img_path,'5.jpg'), os.path.join(base_img_path,'ref.jpg')]
+all_img_paths = [os.path.join(base_img_path,'1.jpg'), os.path.join(base_img_path,'2.jpg'), os.path.join(base_img_path,'3.jpg'), os.path.join(base_img_path,'4.jpg'), os.path.join(base_img_path,'5.jpg'), os.path.join(base_img_path,'6.jpg'), os.path.join(base_img_path,'ref.jpg')]
 
-ref_img_size = (200, 200, 3)
+ref_img_size = (10, 10, 3)
 clear_npz = True
 vp_suff = '_vp'
 gh_suff = '_gh'
@@ -30,7 +30,7 @@ pts = create_matching_points(img_path, suff = '_p2p')['mps']
 pts_ref = np.array([[0,0],[N-1,0],[N-1,M-1],[0,M-1]])
 ## Point to point correspondence
 H, Hinv = find_homography_2d(pts, pts_ref)
-apply_homography(img_path, Hinv, num_partitions = 4, suff = '_p2p')
+apply_homography2(img_path, Hinv, num_partitions = 4, suff = '_p2p')
 
 # # Vanishing line approach - Homework 3
 # # Two step approach
