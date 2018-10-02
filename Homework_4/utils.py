@@ -3,8 +3,8 @@ import numpy as np
 import time
 from os.path import join, basename, splitext, dirname
 
-def harris(img, sigma = 1.414, thresh = 0.08):
-	# img is gray scale image
+def harris_corners(img, sigma = 1.414, thresh = 0.08):
+	assert img.ndim == 2, 'img is a 2D ndarray (grayscale image)'
 
 	# Size of Gaussian Kernel
 	K = int(2 * np.floor(3 * 1.414 * sigma) + 1)
@@ -18,12 +18,12 @@ def harris(img, sigma = 1.414, thresh = 0.08):
 
 	Nh = int(5 * sigma)
 	if(Nh % 2 == 0): Nh += 1
-	
-	df_idx = (Nh-1)/2 
+
+	df_idx = (Nh-1)/2
 
 	H = np.zeros((img_height-2*df_idx, img_width-2*df_idx))
 
-	nms_win_size = 31 # non maximum suppression window size. 
+	nms_win_size = 31 # non maximum suppression window size.
 	nms_half = (nms_win_size-1)/2
 
 	desc_size = 8 # window size is 31
@@ -51,7 +51,7 @@ def harris(img, sigma = 1.414, thresh = 0.08):
 
 			beta = det / (trace * trace) # Min = 0, Max = 0.25. Higher the better.
 
-			if(beta > thresh): 
+			if(beta > thresh):
 				H[zr_idx, zc_idx] = beta
 
 	## Non Maximum supression
@@ -69,7 +69,7 @@ def harris(img, sigma = 1.414, thresh = 0.08):
 			nms_win = H[zr_idx - nms_half:zr_idx + nms_half, \
 						zc_idx - nms_half:zc_idx + nms_half]
 
-			# if beta is max in that window, then consider. Ignore otherwise. 
+			# if beta is max in that window, then consider. Ignore otherwise.
 			if(np.max(nms_win[:]) == H[zr_idx, zc_idx]):
 				kps.append([row_idx, col_idx])
 				features.append(img[row_idx-desc_size:row_idx+desc_size, \
@@ -84,17 +84,17 @@ def extract_kps(image, ftype = 'sift', sigma = 1.414):
 	gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 	if(ftype.lower() == 'sift'):
 		descriptor = cv2.xfeatures2d.SIFT_create()
-		# keypoints (cv2.KeyPoint object) and features (ndarray). 
+		# keypoints (cv2.KeyPoint object) and features (ndarray).
 		(kps, features) = descriptor.detectAndCompute(image, None)
-		kps = np.float32([kp.pt for kp in kps])	
+		kps = np.float32([kp.pt for kp in kps])
 	elif ftype.lower() == 'surf':
 		descriptor = cv2.xfeatures2d.SURF_create()
-		# keypoints (cv2.KeyPoint object) and features (ndarray). 
+		# keypoints (cv2.KeyPoint object) and features (ndarray).
 		(kps, features) = descriptor.detectAndCompute(image, None)
 		kps = np.float32([kp.pt for kp in kps])
 	elif ftype.lower() == 'harris':
 		start = time.time()
-		(kps, features) = harris(gray, sigma = sigma)
+		(kps, features) = harris_corners(gray, sigma = sigma)
 		print 'Harris corners: %.02f secs'%(time.time()-start)
 
 	# kps: ndarray (_ x 2); features: ndarray (_ x 128)
@@ -195,14 +195,14 @@ def run(image1_path, image2_path, ftype = 'sift', method = 'ncc', \
 
 	cv2.imwrite(fname_path, vis)
 	cv2.imshow('Visualization', vis)
-	cv2.waitKey(0)	
+	cv2.waitKey(0)
 
 if __name__ == '__main__':
-	img1_path = 'pair3/1.jpg'
-	img2_path = 'pair3/2.jpg'
+	img1_path = 'pair1/1.jpg'
+	img2_path = 'pair1/2.jpg'
 
-	ftype = 'sift'
+	ftype = 'harris'
 	method = 'ncc'
-	thresh = 0.97 # SURF 0.9999
+	thresh = 0.999 # SURF 0.9999
 
 	vis = run(img1_path, img2_path, ftype = ftype, method=method, thresh = thresh)

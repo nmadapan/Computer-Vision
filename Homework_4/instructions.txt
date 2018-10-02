@@ -1,0 +1,30 @@
+
+Adapted from: https://stackoverflow.com/questions/37517983/opencv-install-opencv-contrib-on-windows
+
+Install opencv in Windows:
+  1. Download Visual Studio 2017 (Commnity version works)
+  2. Download CMake (https://cmake.org/download/)
+  3. Download opencv and opencv_contrib from GitHub (https://github.com/opencv)
+  4. Create a directory: 'opencv-*.*.*' (*.*.* is opencv version. For ex: 3.4.3)
+  5. Create two subfolders:
+      - 'opencv-*.*.*/build'
+      - 'opencv-*.*.*/sources'
+  6. Extract opencv and opencv_contrib to 'opencv-*.*.*/sources' directory.
+      - 'opencv_*.*.*/sources/opencv'
+      - 'opencv_*.*.*/sources/opencv_contrib'
+  7. Open CMake and set the following variables:
+      - source code: 'opencv_*.*.*/sources/opencv'
+      - build the binaries: 'opencv_*.*.*/build'
+      * Now click 'Configure'
+  8. Set the following variables:
+      - OPENCV_EXTRA_MODULES_PATH: 'opencv_*.*.*/sources/opencv_contrib/modules'
+      - OPENCV_ENABLE_NONFREE: check
+      - BUILD_opencv_contrib_world: check
+  9. Now click 'Generate' and set the following variables:
+      - Set the generator to 'Visual Studio 15 2017' (the default options)
+  10. Open 'opencv_*.*.*/build/OpenCV.sln' with 'Visual Studio 2017' (It will take some time)
+  11. Change solution configuration to 'Release' and set solution platform to 'Win32'/'Win64'.
+  12. Build the following files in the same order: (right click on the file and click build)
+      1. INSTALL
+      2. ALL_BUILD
+      3. opencv_python2
