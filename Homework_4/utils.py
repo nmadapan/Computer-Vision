@@ -188,7 +188,7 @@ def run(image1_path, image2_path, ftype = 'sift', method = 'ncc', \
 	vis = draw_matches(img1, img2, kps1, kps2, matches)
 
 	fname = splitext(basename(image1_path))[0] + '_' + splitext(basename(image2_path))[0]
-	fname = fname + '_' + str(ftype) + '_' + str(int(sigma*1000)) + '_' + method + '.jpg'
+	fname = fname + '_' + str(ftype) + '_' + str(int(sigma*1000)) + '_' + str(int(thresh*10000)) + '_' + method + '.jpg'
 
 	fname_path = join(dirname(image1_path), fname)
 	print 'Writing to: ', fname_path
@@ -198,11 +198,12 @@ def run(image1_path, image2_path, ftype = 'sift', method = 'ncc', \
 	cv2.waitKey(0)	
 
 if __name__ == '__main__':
-	img1_path = 'pair3/1.jpg'
-	img2_path = 'pair3/2.jpg'
+	img1_path = 'pair4/1.jpg'
+	img2_path = 'pair4/2.jpg'
 
-	ftype = 'sift'
+	ftype = 'harris'
 	method = 'ncc'
-	thresh = 0.97 # SURF 0.9999
+	thresh = 0.94 # SURF 0.9999
+	sigma = 2.00
 
-	vis = run(img1_path, img2_path, ftype = ftype, method=method, thresh = thresh)
+	vis = run(img1_path, img2_path, ftype = ftype, method=method, thresh = thresh, sigma = sigma)
