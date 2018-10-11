@@ -125,7 +125,7 @@ def extract_kps(image, ftype = 'sift', sigma = 1.414):
     ################
 
     ## Assertion
-    assert img.ndim == 3, 'img is a 3D ndarray (RGB image: H x W x 3)'
+    assert image.ndim == 3, 'img is a 3D ndarray (RGB image: H x W x 3)'
 
     ## convert the image to grayscale
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
