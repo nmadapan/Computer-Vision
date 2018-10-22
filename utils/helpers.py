@@ -1,8 +1,180 @@
 import cv2
 import numpy as np
 import os, time, sys
-
 from NonlinearLeastSquares import NonlinearLeastSquares as NLS
+import matplotlib.pyplot as plt
+
+def create_contours(img_mask, neigborhood = 8, kernel_size = 5):
+    assert img_mask.ndim == 2, 'img_mask should be a binary image'
+    assert neigborhood == 8 or neigborhood == 4, 'neigborhood should be either 4 or 8'
+    assert kernel_size%2 ==1, 'Kernel size should be an odd number'
+
+    half_sz = kernel_size/2
+
+    img_contour = np.zeros_like(img_mask).astype(np.uint8)
+
+    for ridx in range(half_sz, img_mask.shape[0]-half_sz):
+        for cidx in range(half_sz, img_mask.shape[1]-half_sz):
+            temp = img_mask[ridx-half_sz:ridx+half_sz, cidx-half_sz:cidx+half_sz]
+            value = np.mean(temp.flatten())
+            if(value != 0 and value != 1):
+                img_contour[ridx, cidx] = 255
+    return img_contour
+
+def create_img_texture(img, kernel_sizes = [3, 5, 7]):
+    assert len(kernel_sizes) == 3, 'No. of kernel sizes should be 3.'
+    assert img.ndim == 2 or img.ndim == 3, 'Image should be either rgb or grayscale'
+
+    img_texture = np.zeros((img.shape[0], img.shape[1], len(kernel_sizes)))
+
+    for kidx, ksize in enumerate(kernel_sizes):
+        img_texture[:, :, kidx] = compute_img_variance(img, ksize)
+
+    return img_texture
+
+def compute_img_variance(img, kernel_size):
+    '''
+    Input arguments:
+        * img: 2D np.ndarray. It can be a rgb or gray scale image
+        * kernel_size: An odd positive integer.
+    Return:
+        * img_texture: 2D np.ndarray of similar dimension as img
+    '''
+    assert kernel_size%2 == 1, 'Kernel size should be odd number'
+    assert img.ndim == 2 or img.ndim == 3, 'Image should be either rgb or grayscale'
+
+    img_texture = np.zeros((img.shape[0], img.shape[1]))
+    half_sz = kernel_size / 2
+
+    for ridx in range(half_sz, img.shape[0]-half_sz):
+        for cidx in range(half_sz, img.shape[1]-half_sz):
+            if(img.ndim == 2):
+                temp = img[ridx-half_sz:ridx+half_sz, cidx-half_sz:cidx+half_sz]
+            else:
+                temp = img[ridx-half_sz:ridx+half_sz, cidx-half_sz:cidx+half_sz, :]
+            img_texture[ridx, cidx] = np.std(temp.flatten())
+
+    return img_texture
+
+def otsu_channels(rgb_img, init_thresh = 0, display = False):
+    ## Assertions
+    if(isinstance(rgb_img, str)):
+        rgb_img = cv2.imread(rgb_img)
+    elif(isinstance(rgb_img, np.ndarray)):
+        assert rgb_img.ndim == 3, 'Input image should be a gray scale image.'
+
+    if(not isinstance(init_thresh, list)):
+        init_thresh = [init_thresh, init_thresh, init_thresh]
+
+    thresh_list = [0]*3
+    mask_list = [None] * 3
+
+    for ch_idx in range(rgb_img.ndim):
+        img = rgb_img[:, :, ch_idx]
+        thresh_list[ch_idx], mask_list[ch_idx], _, _ = otsu(np.copy(img), init_thresh = init_thresh[ch_idx], display = display)
+
+    mask = np.logical_and(mask_list[0], mask_list[1])
+    mask = np.logical_or(mask, mask_list[2])
+
+    # mask = np.logical_and(np.logical_not(mask_list[0]), mask_list[2])
+    # mask = np.logical_or(mask, mask_list[2])
+
+    mask_3d = np.zeros((mask.shape[0], mask.shape[1], 3))
+    mask_3d[:,:,0] = mask
+    mask_3d[:,:,1] = mask
+    mask_3d[:,:,2] = mask
+
+    foreground = np.copy(rgb_img)
+    foreground[~mask] = 0
+    background = np.copy(rgb_img)
+    background[mask] = 0
+
+    cv2.imshow('Foreground', foreground)
+    cv2.imshow('Background', background)
+    cv2.waitKey(0)
+
+    return thresh_list, mask, foreground, background
+
+def otsu_iter(img, num_iter = 1, display = False):
+    init_thresh = 0
+    for iter_idx in range(num_iter):
+        if(img.ndim == 2):
+            init_thresh, mask, foreground, background = otsu(np.copy(img), init_thresh = init_thresh, display = display)
+        else:
+            init_thresh, mask, foreground, background = otsu_channels(np.copy(img), init_thresh = init_thresh, display = display)
+        print init_thresh
+    return init_thresh, mask, foreground, background
+
+def otsu(gray_img, init_thresh = 0, display = False):
+    '''
+    Description: Apply Otsu's algorithm for foreground extraction.
+    Input arguments:
+        * gray_img: gray scale image
+        * display: If True, histogram, variance and images of both the foreground and the background are displayed.
+    Return:
+        * thresh_level: An np.uint8 integer. Threshold gray level that separates the foreground and the background
+        * mask: A foreground mask. 2D np.ndarray of same size as the image consisting of True/Ones and False/Zeros.
+        * foreground: Foreground of the image. 2D np.ndarray of same size as the image where background is suppressed to zero intensity value.
+        * background: Background of the image. 2D np.ndarray of same size as the image where the foreground is suppressed to zero intensity value.
+    '''
+    ## Assertions
+    if(isinstance(gray_img, str)):
+        gray_img = cv2.imread(gray_img, 0)
+    elif(isinstance(gray_img, np.ndarray)):
+        assert gray_img.ndim == 2, 'Input image should be a gray scale image.'
+
+    ## Display the original image
+    if(display):
+        cv2.imshow('Original image', gray_img)
+        cv2.waitKey(0)
+
+    ## Construct histogram of the given image
+    hist = np.zeros(256,)
+    total_num_pixels = np.sum((gray_img >= init_thresh).flatten())
+    for idx in range(init_thresh, hist.size):
+        hist[idx] = np.sum((gray_img == idx).flatten()) / float(total_num_pixels)
+    if(display):
+        plt.plot(hist)
+        plt.show()
+
+    ## Find the between class variance at each intensity value [0, 255].
+    betw_cls_var = np.zeros(256,)
+    for idx in range(init_thresh + 1, hist.size):
+        # prob. of background
+        w0 = np.sum(hist[init_thresh:idx])
+        # prob. of foreground
+        w1 = np.sum(hist[idx:])
+
+        if(w0 == 0 or w1 == 0): continue
+
+        # Mean of the background
+        mu0 = np.sum(np.multiply(range(init_thresh, idx), hist[init_thresh:idx])) / w0
+        # Mean of the foreground
+        mu1 = np.sum(np.multiply(range(idx, hist.size), hist[idx:])) / w1
+        # Update the between class variance at current threshold level ('idx')
+        # print w0, w1, mu0, mu1
+        betw_cls_var[idx] = w0 * w1 * (mu0 - mu1)**2
+
+    if(display):
+        plt.plot(betw_cls_var)
+        plt.show()
+
+    ## Compute the threshold level. It is argmax of b/w class variances.
+    thresh_level = np.argmax(betw_cls_var)
+    ## Compute the foreground mask
+    mask = gray_img > thresh_level
+    ## Compute the foreground and the background
+    foreground = np.copy(gray_img)
+    foreground[~mask] = 0
+    background = np.copy(gray_img)
+    background[mask] = 0
+
+    if(display):
+        cv2.imshow('Foreground', foreground)
+        cv2.imshow('Background', background)
+        cv2.waitKey(0)
+
+    return thresh_level, mask, foreground, background
 
 hvars = ['h11', 'h12', 'h13', 'h21', 'h22', 'h23', 'h31', 'h32']
 Nx = '(h11*{0}+h12*{1}+h13)'
