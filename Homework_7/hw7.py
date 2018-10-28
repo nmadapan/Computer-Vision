@@ -94,41 +94,41 @@ def fake_get_lbp_hist(img_path):
 R = 1
 P = 8
 
-## Creating training data
-print '=============== Creating Training Data ================='
-training_dir_path = 'Images\\training'
-classnames = os.listdir(training_dir_path)
-features = {cname: [] for cname in classnames}
+# ## Creating training data
+# print '=============== Creating Training Data ================='
+# training_dir_path = 'Images\\training'
+# classnames = os.listdir(training_dir_path)
+# features = {cname: [] for cname in classnames}
 
-for cname in classnames:
-    print '---' + cname + '---'
-    img_dir = os.path.join(training_dir_path, cname)
-    img_paths = glob(os.path.join(img_dir, '*.jpg'))
-    for img_path in img_paths:
-        print os.path.basename(img_path),
-        hist = get_lbp_hist(img_path)
-        features[cname].append(hist)
-    print ''
+# for cname in classnames:
+#     print '---' + cname + '---'
+#     img_dir = os.path.join(training_dir_path, cname)
+#     img_paths = glob(os.path.join(img_dir, '*.jpg'))
+#     for img_path in img_paths:
+#         print os.path.basename(img_path),
+#         hist = get_lbp_hist(img_path)
+#         features[cname].append(hist)
+#     print ''
 
-    features[cname] = np.array(features[cname])
+#     features[cname] = np.array(features[cname])
 
-with open('train_features.pickle', 'wb') as fp:
-    pickle.dump(features, fp)
+# with open('train_features.pickle', 'wb') as fp:
+#     pickle.dump(features, fp)
 
-with open('train_features.pickle', 'rb') as fp:
-    features = pickle.load(fp)
+# with open('train_features.pickle', 'rb') as fp:
+#     features = pickle.load(fp)
 
 
 ## Creating testing data
 print '\n============ Creating Testing Data ============='
 testing_dir_path = 'Images\\testing'
 test_img_paths = glob(os.path.join(testing_dir_path, '*.jpg'))
-out_features = {os.path.basename(img_path): None for img_path in test_img_paths}
+out_features = {os.path.basename(test_img_path): None for test_img_path in test_img_paths}
 
 for test_img_path in test_img_paths:
     print os.path.basename(test_img_path),
     out_feat_vec = get_lbp_hist(test_img_path)
-    out_features[os.path.basename(img_path)] = out_feat_vec
+    out_features[os.path.basename(test_img_path)] = out_feat_vec
 
 with open('test_features.pickle', 'wb') as fp:
     pickle.dump(out_features, fp)
