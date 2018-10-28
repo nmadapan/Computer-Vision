@@ -3,11 +3,21 @@ import numpy as np
 import os, time, sys
 from NonlinearLeastSquares import NonlinearLeastSquares as NLS
 import matplotlib.pyplot as plt
+from os.path import basename, dirname, splitext, join
 
-def create_contours(img_mask, neigborhood = 8, kernel_size = 5):
+def create_contours(img_mask, kernel_size = 3):
+    '''
+    Description:
+        Given the binary image mask, this function can be used to identify the contours in the given mask. 8-connectivity is used to identify the neighboring pixels of any given pixel.
+    Input arguments:
+        * img_mask: 2D np.ndarray consiting of zeroes and ones.
+        * kernel_size: Any odd number greater than three.
+    Return:
+        * img_contour: np.ndarray of same size as the img_mask. This is an image consisting of 255 (border pixel) or 0 (non-border pixel)
+    '''
     assert img_mask.ndim == 2, 'img_mask should be a binary image'
-    assert neigborhood == 8 or neigborhood == 4, 'neigborhood should be either 4 or 8'
     assert kernel_size%2 ==1, 'Kernel size should be an odd number'
+    assert kernel_size >= 3, 'Kernel size should be greater than 3'
 
     half_sz = kernel_size/2
 
@@ -22,6 +32,15 @@ def create_contours(img_mask, neigborhood = 8, kernel_size = 5):
     return img_contour
 
 def create_img_texture(img, kernel_sizes = [3, 5, 7]):
+    '''
+    Description:
+        Create texture representation of the image (trep). trep will have three channels each corresponding to one of the kernel sizes.
+    Input arguments:
+        * img: np.ndarray. Gray scale image (M x N) or RGB image (M x N x 3)
+        * kernel_sizes: list of odd numbers greater than 3. length of the list should be 3.
+    Return:
+        * img_texture: texture represetnation of the image.
+    '''
     assert len(kernel_sizes) == 3, 'No. of kernel sizes should be 3.'
     assert img.ndim == 2 or img.ndim == 3, 'Image should be either rgb or grayscale'
 
@@ -34,9 +53,11 @@ def create_img_texture(img, kernel_sizes = [3, 5, 7]):
 
 def compute_img_variance(img, kernel_size):
     '''
+    Description:
+        Compute the image variance at each pixel within a kerne window of size kernel_size
     Input arguments:
         * img: 2D np.ndarray. It can be a rgb or gray scale image
-        * kernel_size: An odd positive integer.
+        * kernel_size: An odd positive integer greater than 3.
     Return:
         * img_texture: 2D np.ndarray of similar dimension as img
     '''
@@ -56,12 +77,32 @@ def compute_img_variance(img, kernel_size):
 
     return img_texture
 
-def otsu_channels(rgb_img, init_thresh = 0, display = False):
+def otsu_channels(rgb_img, init_thresh = 0, display = False, out_dir = '.', img_name = None, ch_names = None, write_flag = False):
+    '''
+    Description:
+        Compute the otsu threshold, foreground and background for an image with three channels. The three channels can be either RGB or texture representations.
+    Input arguments:
+        * rgb_img: np.ndarray of size M x N x 3 and of type np.uint8. Or it can be an absolute path to the RGB image.
+        * init_thresh: Otsu's algorithm will find a threshold that distinguishes foreground from background. It looks for a threshold starting from init_thresh. Default value is set to 0.
+        * display: If True, the images/graphs will be displayed.
+        * out_dir: Absolute path to the folder where we want the images to be written.
+        * img_name: string. The name of the input image.
+        * ch_names: list of strings. Channel names. Its size should be 3.
+        * write_flag: If True, the output images will be written to the disk.
+    Return:
+        * thresh_list: list of three np.uint8 integers. Each value corresponds to the Otsu's threshold of one of the channels.
+        * mask: np.ndarray of same size as rgb_img but in 2D (no third dimension). This is an array of True/False. True indicates the foreground and False indicating the background.
+        * foreground: np.ndarray of same size as rgb_img. The pixels corresponding to background are suppressed to zero.
+        * background: np.ndarray of same size as rgb_img. The pixels corresponding to foreground are suppressed to zero.
+    '''
     ## Assertions
     if(isinstance(rgb_img, str)):
+        out_dir = dirname(rgb_img)
+        img_name = splitext(basename(rgb_img))[0]
         rgb_img = cv2.imread(rgb_img)
     elif(isinstance(rgb_img, np.ndarray)):
         assert rgb_img.ndim == 3, 'Input image should be a gray scale image.'
+        assert img_name is not None, 'img_name can not be None'
 
     if(not isinstance(init_thresh, list)):
         init_thresh = [init_thresh, init_thresh, init_thresh]
@@ -69,15 +110,36 @@ def otsu_channels(rgb_img, init_thresh = 0, display = False):
     thresh_list = [0]*3
     mask_list = [None] * 3
 
+    if ch_names is None: ch_names = ['blue', 'green', 'red']
+
     for ch_idx in range(rgb_img.ndim):
+        print 'Processing: ', ch_names[ch_idx]
         img = rgb_img[:, :, ch_idx]
-        thresh_list[ch_idx], mask_list[ch_idx], _, _ = otsu(np.copy(img), init_thresh = init_thresh[ch_idx], display = display)
+        thresh_list[ch_idx], mask_list[ch_idx], foreground, background = \
+            otsu(np.copy(img), init_thresh = init_thresh[ch_idx], display = display)
+        if(write_flag):
+            fore_img_cont = create_contours(mask_list[ch_idx])
+            back_img_cont = create_contours(np.logical_not(mask_list[ch_idx]))
+            out_path = join(out_dir, img_name + '_' + ch_names[ch_idx])
+            cv2.imwrite(out_path+'_fore.jpg', foreground)
+            cv2.imwrite(out_path+'_back.jpg', background)
+            cv2.imwrite(out_path+'_fore_cont.jpg', fore_img_cont)
+            cv2.imwrite(out_path+'_back_cont.jpg', back_img_cont)
 
-    mask = np.logical_and(mask_list[0], mask_list[1])
-    mask = np.logical_or(mask, mask_list[2])
+    print 'Putting everything together. '
 
-    # mask = np.logical_and(np.logical_not(mask_list[0]), mask_list[2])
-    # mask = np.logical_or(mask, mask_list[2])
+    ## For lighthouse
+    # mask = np.logical_or(np.logical_not(mask_list[0]), mask_list[2])
+    # mask = np.logical_and(mask, np.logical_not(mask_list[1]))
+
+    ## For baby
+    # mask = np.logical_and(mask_list[0], mask_list[1])
+    # mask = np.logical_and(mask, mask_list[2])
+
+    ## For ski
+    # mask = np.logical_not(mask_list[0])
+    mask = np.logical_and(np.logical_not(mask_list[0]), mask_list[1])
+    mask = np.logical_and(mask, mask_list[2])
 
     mask_3d = np.zeros((mask.shape[0], mask.shape[1], 3))
     mask_3d[:,:,0] = mask
@@ -89,20 +151,48 @@ def otsu_channels(rgb_img, init_thresh = 0, display = False):
     background = np.copy(rgb_img)
     background[mask] = 0
 
-    cv2.imshow('Foreground', foreground)
-    cv2.imshow('Background', background)
-    cv2.waitKey(0)
+    if(display):
+        cv2.imshow('Foreground', foreground)
+        cv2.imshow('Background', background)
+
+    if(write_flag):
+        fore_img_cont = create_contours(mask)
+        back_img_cont = create_contours(np.logical_not(mask))
+        out_path = join(out_dir, img_name)
+        cv2.imwrite(out_path+'_fore.jpg', foreground)
+        cv2.imwrite(out_path+'_back.jpg', background)
+        cv2.imwrite(out_path+'_fore_cont.jpg', fore_img_cont)
+        cv2.imwrite(out_path+'_back_cont.jpg', back_img_cont)
+        if(display): cv2.imshow('Foreground contours', fore_img_cont)
+
+    if(display): cv2.waitKey(0)
 
     return thresh_list, mask, foreground, background
 
-def otsu_iter(img, num_iter = 1, display = False):
+def otsu_iter(img, num_iter = 1, display = False, out_dir = '.', img_name = None, ch_names = None, write_flag = False):
+    '''
+    Description:
+        Compute the otsu threshold, foreground and background for an image with one or three channels. If there are three channels, they can be either RGB or texture representations.
+        In this function the Otsu's thresholds are determined in more than one ITERATIONS. The no. of iterations is determined by num_iter.
+    Input arguments:
+        * img: np.ndarray of size M x N x 3 or M x N. It is of type np.uint8.
+        * display: If True, the images/graphs will be displayed.
+        * out_dir: Absolute path to the folder where we want the images to be written.
+        * img_name: string. The name of the input image.
+        * ch_names: list of strings. Channel names. Its size should be 3.
+        * write_flag: If True, the output images will be written to the disk.
+    Return:
+        * init_thresh: list of three np.uint8 integers. Each value corresponds to the Otsu's threshold of one of the channels.
+        * mask: np.ndarray of same size as img but in 2D (no third dimension). This is an array of True/False. True indicates the foreground and False indicating the background.
+        * foreground: np.ndarray of same size as img. The pixels corresponding to background are suppressed to zero.
+        * background: np.ndarray of same size as img. The pixels corresponding to foreground are suppressed to zero.
+    '''
     init_thresh = 0
     for iter_idx in range(num_iter):
         if(img.ndim == 2):
             init_thresh, mask, foreground, background = otsu(np.copy(img), init_thresh = init_thresh, display = display)
         else:
-            init_thresh, mask, foreground, background = otsu_channels(np.copy(img), init_thresh = init_thresh, display = display)
-        print init_thresh
+            init_thresh, mask, foreground, background = otsu_channels(np.copy(img), init_thresh = init_thresh, display = display, out_dir = out_dir, img_name = img_name, ch_names = ch_names, write_flag = write_flag)
     return init_thresh, mask, foreground, background
 
 def otsu(gray_img, init_thresh = 0, display = False):
@@ -133,9 +223,9 @@ def otsu(gray_img, init_thresh = 0, display = False):
     total_num_pixels = np.sum((gray_img >= init_thresh).flatten())
     for idx in range(init_thresh, hist.size):
         hist[idx] = np.sum((gray_img == idx).flatten()) / float(total_num_pixels)
-    if(display):
-        plt.plot(hist)
-        plt.show()
+    # if(display):
+    #     plt.plot(hist)
+    #     plt.show()
 
     ## Find the between class variance at each intensity value [0, 255].
     betw_cls_var = np.zeros(256,)
@@ -155,9 +245,9 @@ def otsu(gray_img, init_thresh = 0, display = False):
         # print w0, w1, mu0, mu1
         betw_cls_var[idx] = w0 * w1 * (mu0 - mu1)**2
 
-    if(display):
-        plt.plot(betw_cls_var)
-        plt.show()
+    # if(display):
+    #     plt.plot(betw_cls_var)
+    #     plt.show()
 
     ## Compute the threshold level. It is argmax of b/w class variances.
     thresh_level = np.argmax(betw_cls_var)
@@ -175,6 +265,7 @@ def otsu(gray_img, init_thresh = 0, display = False):
         cv2.waitKey(0)
 
     return thresh_level, mask, foreground, background
+
 
 hvars = ['h11', 'h12', 'h13', 'h21', 'h22', 'h23', 'h31', 'h32']
 Nx = '(h11*{0}+h12*{1}+h13)'
