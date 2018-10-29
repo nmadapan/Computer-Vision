@@ -11,20 +11,11 @@ import pickle
 sys.path.append('..\\utils')
 from helpers import *
 
-# binvec = [0, 1, 0, 0, 0, 1, 1, 0]
-
-# bv = BitVector(bitlist = binvec)
-
-# for _ in range(100000):
-#     intvals =  [int(bv<<1) for _ in range(len(binvec))]
-#     minbv = BitVector(intVal = min(intvals), size = len(binvec))
-
-# # print minbv
-
-# # bvruns = minbv.runs()
-# # print len(bvruns)
-
 def create_circ_points(radius = 1, num_neighbors = 8):
+    '''
+    Find out the points on the circle
+    This function returns the x and y coordinates of points on a circle.
+    '''
     R = radius
     P = num_neighbors
 
@@ -65,6 +56,9 @@ def lbp_binvec(A):
     return ret.astype(int).tolist()
 
 def lbp_value(binvec, P = 8):
+    '''
+    Return the encoding the LBP pattern given in binvec
+    '''
     bv = BitVector(bitlist = binvec)
     intvals =  [int(bv<<1) for _ in range(len(binvec))]
     minbv = BitVector(intVal = min(intvals), size = len(binvec))
@@ -75,6 +69,9 @@ def lbp_value(binvec, P = 8):
     else: return len(bvruns[1])
 
 def get_lbp_hist(img_path):
+    '''
+    Return the LBP histogram given the path to an image (RGB or Grayscale)
+    '''
     img = cv2.imread(img_path, 0)
     hist = [0]*(P+2)
     for x_idx in range(1, img.shape[1]-1):
@@ -87,37 +84,31 @@ def get_lbp_hist(img_path):
     hist = np.array(hist).astype(float) / np.sum(hist)
     return hist
 
-def fake_get_lbp_hist(img_path):
-    return np.random.randn(P+2)
-
-
 R = 1
 P = 8
 
-# ## Creating training data
-# print '=============== Creating Training Data ================='
-# training_dir_path = 'Images\\training'
-# classnames = os.listdir(training_dir_path)
-# features = {cname: [] for cname in classnames}
+## Creating training data
+print '=============== Creating Training Data ================='
+training_dir_path = 'Images\\training'
+classnames = os.listdir(training_dir_path)
+features = {cname: [] for cname in classnames}
 
-# for cname in classnames:
-#     print '---' + cname + '---'
-#     img_dir = os.path.join(training_dir_path, cname)
-#     img_paths = glob(os.path.join(img_dir, '*.jpg'))
-#     for img_path in img_paths:
-#         print os.path.basename(img_path),
-#         hist = get_lbp_hist(img_path)
-#         features[cname].append(hist)
-#     print ''
+for cname in classnames:
+    print '---' + cname + '---'
+    img_dir = os.path.join(training_dir_path, cname)
+    img_paths = glob(os.path.join(img_dir, '*.jpg'))
+    for img_path in img_paths:
+        print os.path.basename(img_path),
+        hist = get_lbp_hist(img_path)
+        features[cname].append(hist)
+    print ''
+    features[cname] = np.array(features[cname])
 
-#     features[cname] = np.array(features[cname])
+with open('train_features.pickle', 'wb') as fp:
+    pickle.dump(features, fp)
 
-# with open('train_features.pickle', 'wb') as fp:
-#     pickle.dump(features, fp)
-
-# with open('train_features.pickle', 'rb') as fp:
-#     features = pickle.load(fp)
-
+with open('train_features.pickle', 'rb') as fp:
+    features = pickle.load(fp)
 
 ## Creating testing data
 print '\n============ Creating Testing Data ============='
@@ -135,21 +126,3 @@ with open('test_features.pickle', 'wb') as fp:
 
 with open('test_features.pickle', 'rb') as fp:
     out_features = pickle.load(fp)
-
-
-# x_disp, y_disp = create_circ_points()
-# x_indices = np.int8(np.round(x_disp))
-# y_indices = np.int8(np.round(y_disp))
-
-# print x_indices
-# print y_indices
-
-# print x_disp
-# print y_disp
-
-# A = [[1, 5, 3], [5, 3, 1], [4, 0, 0]]
-# A = np.array(A)
-
-# # binvec = lbp_binvec(A)
-
-# print lbp_value([1,0,0,1,1,1,1,1])
