@@ -2,7 +2,7 @@ import pickle
 import numpy as np
 import os, sys, time
 from sklearn.metrics import confusion_matrix
-
+import matplotlib.pyplot as plt
 sys.path.append('..\\utils')
 from helpers import *
 
@@ -23,6 +23,11 @@ train_input = None
 train_output = None
 
 for cname, data in train_features.items():
+    # plt.bar(range(10), data[0,:])
+    # plt.title('Histogram of ' + cname)
+    # plt.xlabel('Bins')
+    # plt.ylabel('Normalized frequency')
+    # plt.show()
     cid = cnames_to_ids[cname]
     if(train_input is None): train_input = data
     else: train_input = np.append(train_input, data, axis = 0)
