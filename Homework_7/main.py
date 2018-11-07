@@ -67,13 +67,15 @@ for fname, test_inst in test_features.items():
     cid = cnames_to_ids[cname]
 
     ## Euclidean
-    pred_label = knn(train_input, train_output, test_inst, metric = 'euclidean', K = 5)
+    pred_label = knn(train_input, train_output, test_inst, metric = 'euclidean', K = 1)
 
     test_pred_label.append(pred_label)
     test_true_label.append(cid)
 
-print zip(test_true_label, test_pred_label)
+# print zip(test_true_label, test_pred_label)
 
 conf_mat = confusion_matrix(test_true_label, test_pred_label)
+print conf_mat
+print 'Accuracy: %.02f'%(np.mean(np.diag(conf_mat/5.0)))
 
 plot_confusion_matrix(conf_mat, classnames, normalize = True)
