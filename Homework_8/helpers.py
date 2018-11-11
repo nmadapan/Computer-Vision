@@ -5,6 +5,8 @@ def dist_mat_vec(M, vec, weights = None, method = 'ssd'):
     # method: 'ncc', 'dot', 'ssd'
     # M : ndarray ( _ x k); vec: (1 x k)
     # Returns a 1D numpy array of distances.
+    if(weights is None):
+        weights = 1
     if(method.lower() == 'ssd'):
         return np.linalg.norm((M - vec)*weights, axis = 1)
     else:
