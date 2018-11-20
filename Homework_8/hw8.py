@@ -12,7 +12,7 @@ NUM_HORZ_LINES = 10
 NUM_VERT_LINES = 8
 SQUARE_SZ = 25
 
-dataset = 'dataset1'
+dataset = 'dataset2'
 base_dir = os.path.join('.\\Data', dataset)
 out_dir = os.path.join('.\\Data\\results', dataset)
 
@@ -28,7 +28,8 @@ else:
 	for img_path in img_paths:
 		print img_path
 		img_points, world_points = find_checkerboard_points(img_path, \
-			(NUM_HORZ_LINES-1, NUM_VERT_LINES-1), unit_size = SQUARE_SZ, display = False)
+			(NUM_HORZ_LINES-1, NUM_VERT_LINES-1), unit_size = SQUARE_SZ,\
+			display = True, out_dir = out_dir)
 		## Find homography from 2 --> 1
 		H, Hinv = find_homography_2d(img_points, world_points)
 		## Uncomment to apply the transformed patch on the original image.

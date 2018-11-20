@@ -102,7 +102,7 @@ def order_lines(lines, type = 'h'):
 	argsort = np.argsort(intercept_list)
 	return lines[argsort, :]
 
-def plot_lines(img, lines):
+def plot_lines(img, lines, color = (0,255,25)):
 	'''
 	img: 2D or 3D np.ndarray
 	lines: list of elements. Each element is a list: it looks like [x1, y1, x2, y2]
@@ -110,11 +110,12 @@ def plot_lines(img, lines):
 	img = np.copy(img)
 	for line in lines:
 		x1, y1, x2, y2 = tuple(line)
-		cv2.line(img,(x1,y1),(x2,y2),(0,255,25),2)
+		cv2.line(img,(x1,y1),(x2,y2),color,2)
 	cv2.imshow('Lines', img)
-	cv2.waitKey(0)
+	cv2.waitKey(5)
+	return img
 
-def filter_white_points(img, points, kernel_sz = 10, thresh = 110, debug = False):
+def filter_white_points(img, points, kernel_sz = 10, thresh = 150, debug = False):
 	'''
 	points: 2D/3D np.ndarray. Rows look like [x1, y1].
 	'''
@@ -188,7 +189,7 @@ def rth_to_xy(rth_arr):
 		xy_arr.append(nline)
 	return np.array(xy_arr)
 
-def find_checkerboard_points(img_path, pattern_size, unit_size, display = False):
+def find_checkerboard_points(img_path, pattern_size, unit_size, display = False, out_dir = ''):
 	'''
 	Description:
 		Return checker board edges
@@ -279,7 +280,12 @@ def find_checkerboard_points(img_path, pattern_size, unit_size, display = False)
 			print len(h_lines), len(v_lines)
 
 	if(display):
-		plot_lines(color_img, np.concatenate([new_h_lines, new_v_lines], axis = 0))
+		img = plot_lines(color_img, new_h_lines, color = (0, 255, 25))
+		img = plot_lines(img, new_v_lines, color = (255, 0, 0))
+		fname = os.path.basename(img_path)
+		fname = os.path.splitext(fname)[0] + '_' + os.path.splitext(fname)[1]
+		print 'Writing to: ', os.path.join(out_dir, fname)
+		cv2.imwrite(os.path.join(out_dir, fname), img)
 
 	## Obtain final list of points in raster scan order.
 	final_points = []
