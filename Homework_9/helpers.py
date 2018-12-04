@@ -7,39 +7,131 @@ from os.path import basename, dirname, splitext, join
 import itertools
 from scipy.optimize import least_squares
 
-def rectify_images(left_img, right_img, F, P_prime, P = None):
-	'''
-	Description:
-	Input arguments:
-		* left_img: path or 3D np.ndarray of the left image
-		* right_img: path or 3D np.ndarray of the right image
-		* F: 3 x 3 np.ndarray
-		* P_prime: 3 x 4 np.ndarray
-	Return:
-	'''
-	if(isinstance(left_img, str)): left_img = cv2.imread(left_img)
-	if(isinstance(right_img, str)): right_img = cv2.imread(right_img)
-	if(P is None):
-		P = np.zeros((3, 4))
-		P[:, :-3] = np.eye(3)
-
-	l_height, l_width = left_shape[0], left_shape[1]
-	r_height, r_width = right_shape[0], right_shape[1]
-
-	T_left = np.array([[1, 0, -1*l_width/2.0],[0, 1, -1*l_height/2.0],[0, 0, 1]])
-	T_right = np.array([[1, 0, -1*r_width/2.0],[0, 1, -1*r_height/2.0],[0, 0, 1]])
-
-	###
-	## YET TO DO ... INCOMPLETE
-	###
-
-	pass
-
 #########################
 ### Global Variables ####
 #########################
 x_true = None
 x_prime_true = None
+
+def get_null_vec(A):
+	U, S, V = np.linalg.svd(A)
+	return V.T[:,-1]
+
+def abc_loss_fn(w):
+	temp = np.sum(real_to_homo(x_prime_true) * np.array(w), axis = 1) - x_true[:, 0]
+	return np.sum(temp ** 2)
+
+def rectify_images(left, right, F):
+	'''
+	Description:
+	Input arguments:
+		* left is a dict
+			# 'img': image path or np.ndarray of an image
+			# 'mps': matching points. 2D np.ndarray. Rows are points. Columns are x and y coordinates.
+			# 'e': 1D np.array. Epi pole
+			# 'P': Camera matrix of left image. 2D 3 x 4 np.ndarray
+		* right is a dict
+			# 'img': image path or np.ndarray of an image
+			# 'mps': matching points. 2D np.ndarray. Rows are points. Columns are x and y coordinates.
+			# 'e': 1D np.array. Epi pole
+			# 'P': Camera matrix of left image. 2D 3 x 4 np.ndarray
+		* F: 3 x 3 np.ndarray
+	Return:
+	'''
+	global x_true, x_prime_true
+	left_img = left['img']
+	left_mps = left['mps']
+	left_e = left['e']
+	P = left['P']
+
+	right_img = right['img']
+	right_mps = right['mps']
+	right_e = right['e']
+	P_prime = right['P']
+
+	if(isinstance(left_img, str)): left_img = cv2.imread(left_img)
+	if(isinstance(right_img, str)): right_img = cv2.imread(right_img)
+
+	l_height, l_width = left_img.shape[0], left_img.shape[1]
+	r_height, r_width = right_img.shape[0], right_img.shape[1]
+
+	T_left = np.array([[1, 0, -1*l_width/2.0],[0, 1, -1*l_height/2.0],[0, 0, 1]])
+	T_right = np.array([[1, 0, -1*r_width/2.0],[0, 1, -1*r_height/2.0],[0, 0, 1]])
+
+	## Rectifying the right image
+	t_right_e = nmlz(np.dot(T_right, right_e))
+	angle = np.arctan(-1*t_right_e[1]/t_right_e[0])
+	print np.arctan2(t_right_e[1], -1*t_right_e[0])
+	f = t_right_e[0] * np.cos(angle) - t_right_e[1] * np.sin(angle)
+
+	G = np.array([[1, 0, 0],
+				[0, 1, 0],
+				[-1.0/f, 0, 1]])
+	R = np.array([[np.cos(angle), -1*np.sin(angle), 0],
+				[np.sin(angle), np.cos(angle), 0],
+				[0, 0, 1]])
+	H2 = np.dot(np.dot(G, R), T_right)
+	# print 'new e right', np.dot(H2, right_e)
+
+	r_center_rect = nmlz(np.dot(H2, [r_width/2.0, r_height/2.0, 1]))
+	T2 = np.array([[1, 0, r_width/2.0 - r_center_rect[0]],
+				[0, 1, r_height/2.0 - r_center_rect[1]],
+				[0, 0, 1]])
+
+	H2 = np.dot(T2, H2)
+
+	## Rectifying left image.
+	M = np.dot(P_prime, np.linalg.pinv(P))
+	H0 = np.dot(H2, M)
+	left_mps_hat = homo_to_real(np.dot(H0, real_to_homo(left_mps).T).T)
+	right_mps_hat = homo_to_real(np.dot(H2, real_to_homo(right_mps).T).T)
+	x_prime_true = left_mps_hat
+	x_true = right_mps_hat
+	x = [0.0, 0., 0.]
+	x = least_squares(abc_loss_fn, x).x
+	print 'x', x
+	# A = real_to_homo(left_mps_hat)
+	# b = right_mps_hat[:, 0]
+	# x = np.dot(np.linalg.pinv(A), b)
+
+	HA = np.array([[x[0], x[1], x[2]],
+				[0, 1, 0],
+				[0, 0, 1]])
+
+	H1 = np.dot(HA, H0)
+	H1 = H0
+	print 'x', x
+	print 'H1', H1
+
+	# l_center_rect = nmlz(np.dot(H1, [l_width/2.0, l_height/2.0, 1]))
+	# print 'l_center_rect', l_center_rect
+	# print 'l actual center', [l_width/2.0, l_height/2.0, 1]
+	# T1 = np.array([[1, 0, l_width/2.0 - l_center_rect[0]],
+	# 			[0, 1, l_height/2.0 - l_center_rect[1]],
+	# 			[0, 0, 1]])
+	# print 'T1', T1
+	# H1 = np.dot(T1, H1)
+
+	## Find rectified F
+	F_rect = np.dot(np.dot(np.linalg.inv(H2.T), F), np.linalg.inv(H1))
+
+	## Rectified matching points
+	left_mps_rect = homo_to_real(np.dot(H1, real_to_homo(left_mps).T).T)
+	right_mps_rect = homo_to_real(np.dot(H2, real_to_homo(right_mps).T).T)
+
+	## Rectified epi poles
+	left_e_rect = nmlz(get_null_vec(F_rect))
+	right_e_rect = nmlz(get_null_vec(F_rect.T))
+
+	left['mps_rect'] =  left_mps_rect
+	left['e_rect'] = left_e_rect
+	left['H'] = H1
+
+	right['mps_rect'] = right_mps_rect
+	right['e_rect'] = right_e_rect
+	right['H'] = H2
+
+	return left, right, F_rect
 
 def loss_fn(w):
 	global x_true, x_prime_true
@@ -71,7 +163,7 @@ def skew(vec):
 	x, y, z = vec[0], vec[1], vec[2]
 	return np.array([[0, -z, y],[z, 0, -x],[-y, x, 0]])
 
-def compute_global_coordinates(F, left_mps, right_mps, left_shape = None, right_shape = None):
+def compute_global_coordinates(left, right, F):
 	'''
 	Description:
 	Input arguments:
@@ -87,12 +179,18 @@ def compute_global_coordinates(F, left_mps, right_mps, left_shape = None, right_
 	#########################
 	global x_true, x_prime_true
 
+	left_mps = left['mps']
+	left_shape = left['img'].shape
+
+	right_mps = right['mps']
+	right_shape = right['img'].shape
+
 	##################
 	## Left Camera ###
 	##################
 	## Compute e_left (epipole of left image)
 	U, S, V = np.linalg.svd(F)
-	e_left = V.T[:,-1]
+	e_left = nmlz(V.T[:,-1])
 	## Left camera matrix
 	P = np.zeros((3, 4))
 	P[:,:3] = np.eye(3)
@@ -102,7 +200,7 @@ def compute_global_coordinates(F, left_mps, right_mps, left_shape = None, right_
 	##################
 	## Compute e_prime or e_right (epipole of right image)
 	U, S, V = np.linalg.svd(F.T)
-	e_right = V.T[:,-1]
+	e_right = nmlz(V.T[:,-1])
 	M = np.dot(skew(e_right), F)
 	P_prime = np.zeros((3, 4))
 	P_prime[:,:3] = M
@@ -149,13 +247,13 @@ def compute_global_coordinates(F, left_mps, right_mps, left_shape = None, right_
 	# print new_G
 
 	## Compute modified parameters
-	new_e_prime = new_P_prime[:, -1]
+	new_e_prime = nmlz(new_P_prime[:, -1])
 	new_F = np.dot(np.dot(skew(new_e_prime), new_P_prime), np.linalg.pinv(P))
 	## Compute e_left (epipole of left image)
 	U, S, V = np.linalg.svd(new_F)
-	new_e_left = homo_to_real(V.T[:,-1])
+	new_e_left = nmlz(V.T[:,-1])
 
-	return new_F, new_P_prime, new_G
+	return new_F, new_e_left, new_e_prime, P, new_P_prime, new_G
 
 def compute_fund_mat(left_mps, right_mps, left_shape = None, right_shape = None):
 	'''
@@ -291,3 +389,102 @@ def hinv(H):
 	assert H.shape[0] == H.shape[1], 'H should be a square matrix'
 	Hinv = np.linalg.inv(H)
 	return Hinv / Hinv[-1,-1]
+
+def apply_homography2(img_path, H, num_partitions = 1, suff = ''):
+	if(isinstance(img_path, str)): img = cv2.imread(img_path)
+	else:
+		img = img_path
+		img_path = 'sample.jpg'
+
+	img[0,:], img[:,0], img[-1,:], img[:,-1] = 0, 0, 0, 0
+
+	xv, yv = np.meshgrid(range(0, img.shape[1], img.shape[1]-1), range(0, img.shape[0], img.shape[0]-1))
+	img_pts = np.array([xv.flatten(), yv.flatten()]).T
+	trans_img_pts = np.dot(H, real_to_homo(img_pts).T)
+	ttt = homo_to_real(trans_img_pts.T).T
+	_w = np.max(ttt[0, :]) - np.min(ttt[0, :])
+	_h = np.max(ttt[1, :]) - np.min(ttt[1, :])
+	l1, l2 = img.shape[1] / _w, img.shape[0] / _h
+	K = np.diag([l1, l2, 1])
+	H = np.dot(K, H)
+
+	xv, yv = np.meshgrid(range(0, img.shape[1], img.shape[1]-1), range(0, img.shape[0], img.shape[0]-1))
+	img_pts = np.array([xv.flatten(), yv.flatten()]).T
+	trans_img_pts = np.dot(H, real_to_homo(img_pts).T)
+	trans_img_pts = homo_to_real(trans_img_pts.T).astype(int)
+
+	xmin, ymin = np.min(trans_img_pts[:,0]), np.min(trans_img_pts[:,1])
+	xmax, ymax = np.max(trans_img_pts[:,0]), np.max(trans_img_pts[:,1])
+	W_new = xmax - xmin
+	H_new = ymax - ymin
+
+	img_new = np.zeros((H_new+1, W_new+1, 3), dtype = np.uint8)
+	print 'Shape of new image: ', img_new.shape
+
+	x_batch_sz = int(W_new/float(num_partitions))
+	y_batch_sz = int(H_new/float(num_partitions))
+	for x_part_idx in range(num_partitions):
+		for y_part_idx in range(num_partitions):
+			x_start, x_end = x_part_idx*x_batch_sz, (x_part_idx+1)*x_batch_sz
+			y_start, y_end = y_part_idx*y_batch_sz, (y_part_idx+1)*y_batch_sz
+			xv, yv = np.meshgrid(range(x_start, x_end), range(y_start, y_end))
+			xv, yv = xv + xmin, yv + ymin
+			img_new_pts = np.array([xv.flatten(), yv.flatten()]).T
+			trans_img_new_pts = np.dot(hinv(H), real_to_homo(img_new_pts).T)
+			trans_img_new_pts = homo_to_real(trans_img_new_pts.T).astype(int)
+			trans_img_new_pts[:,0] = np.clip(trans_img_new_pts[:,0], 0, img.shape[1]-1)
+			trans_img_new_pts[:,1] = np.clip(trans_img_new_pts[:,1], 0, img.shape[0]-1)
+			img_new_pts = img_new_pts - [xmin, ymin]
+			# This is the bottle nect step. It takes the most time.
+			img_new[img_new_pts[:,1].tolist(), img_new_pts[:,0].tolist(), :] = img[trans_img_new_pts[:,1].tolist(), trans_img_new_pts[:,0].tolist(), :]
+
+	fname, ext = tuple(os.path.basename(img_path).split('.'))
+	write_filepath = os.path.join(os.path.dirname(img_path), fname+suff+'.'+ext)
+	print write_filepath
+	cv2.imwrite(write_filepath, img_new)
+
+def apply_homography(img_path, H, num_partitions = 1, suff = ''):
+	if(isinstance(img_path, str)): img = cv2.imread(img_path)
+	else:
+		img = img_path
+		img_path = 'sample.jpg'
+
+	img[0,:], img[:,0], img[-1,:], img[:,-1] = 0, 0, 0, 0
+
+	xv, yv = np.meshgrid(range(0, img.shape[1], img.shape[1]-1), range(0, img.shape[0], img.shape[0]-1))
+	img_pts = np.array([xv.flatten(), yv.flatten()]).T
+	trans_img_pts = np.dot(H, real_to_homo(img_pts).T)
+	trans_img_pts = homo_to_real(trans_img_pts.T).astype(int)
+
+	print 'trans_img_pts'
+	print trans_img_pts
+
+	xmin, ymin = np.min(trans_img_pts[:,0]), np.min(trans_img_pts[:,1])
+	xmax, ymax = np.max(trans_img_pts[:,0]), np.max(trans_img_pts[:,1])
+	W_new = xmax - xmin
+	H_new = ymax - ymin
+
+	img_new = np.zeros((H_new+1, W_new+1, 3), dtype = np.uint8)
+	print 'Shape of new image: ', img_new.shape
+
+	x_batch_sz = int(W_new/float(num_partitions))
+	y_batch_sz = int(H_new/float(num_partitions))
+	for x_part_idx in range(num_partitions):
+		for y_part_idx in range(num_partitions):
+			x_start, x_end = x_part_idx*x_batch_sz, (x_part_idx+1)*x_batch_sz
+			y_start, y_end = y_part_idx*y_batch_sz, (y_part_idx+1)*y_batch_sz
+			xv, yv = np.meshgrid(range(x_start, x_end), range(y_start, y_end))
+			xv, yv = xv + xmin, yv + ymin
+			img_new_pts = np.array([xv.flatten(), yv.flatten()]).T
+			trans_img_new_pts = np.dot(hinv(H), real_to_homo(img_new_pts).T)
+			trans_img_new_pts = homo_to_real(trans_img_new_pts.T).astype(int)
+			trans_img_new_pts[:,0] = np.clip(trans_img_new_pts[:,0], 0, img.shape[1]-1)
+			trans_img_new_pts[:,1] = np.clip(trans_img_new_pts[:,1], 0, img.shape[0]-1)
+			img_new_pts = img_new_pts - [xmin, ymin]
+			# This is the bottle nect step. It takes the most time.
+			img_new[img_new_pts[:,1].tolist(), img_new_pts[:,0].tolist(), :] = img[trans_img_new_pts[:,1].tolist(), trans_img_new_pts[:,0].tolist(), :]
+
+	fname, ext = tuple(os.path.basename(img_path).split('.'))
+	write_filepath = os.path.join(os.path.dirname(img_path), fname+suff+'.'+ext)
+	print write_filepath
+	cv2.imwrite(write_filepath, img_new)

@@ -1,6 +1,7 @@
 *.zip
 *.avi
 *.dll
+*.png
 
 led / optimized / DLL files
 __pycache__/
