@@ -37,7 +37,7 @@ da.compute_eigen()
 acc_list = []
 st = time.time()
 for K in range(29):
-	acc = pca.test(X, Y, Xtest, Ytest, K = K)
+	acc = da.test(X, Y, Xtest, Ytest, K = K)
 	acc_list.append(acc)
 print 'Time taken: %.04f secs'%(time.time()-st)
 plt.plot(acc_list)
